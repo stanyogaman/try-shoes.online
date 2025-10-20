@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Virtual Sneaker Try-On</title>
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap" rel="stylesheet">
+<style>
+  body {
+    margin: 0;
+    font-family: 'Poppins', sans-serif;
+    background: #0f0f0f;
+    color: white;
+    overflow: hidden;
+  }
+  header {
+    background: #111;
+    padding: 10px 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  header h1 {
+    margin: 0;
+    font-size: 20px;
+    color: #00ffaa;
+  }
+  #controls {
+    display: flex;
+    gap: 10px;
+  }
+  button {
+    background: #00ffaa;
+    border: none;
+    padding: 8px 14px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-weight: 600;
+    transition: 0.2s;
+  }
+  button:hover {
+    background: #00dd88;
+  }
+  video, canvas {
+    position: absolute;
+    top: 0; left: 0;
+    width: 100vw;
+    height: 100vh;
+    object-fit: cover;
+    transform: scaleX(-1);
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>👟 Virtual Sneaker Try-On</h1>
+  <div id="controls">
+    <button onclick="changeSneaker(0)">Sneaker 1</button>
+    <button onclick="changeSneaker(1)">Sneaker 2</button>
+    <button onclick="changeSneaker(2)">Sneaker 3</button>
+  </div>
+</header>
+
+<video id="video" autoplay playsinline></video>
+<canvas id="canvas"></canvas>
+
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose@0.5/pose.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils@0.5/drawing_utils.js"></script>
+
+<script>
+const video = document.getElementById('video');
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+
+// Sneaker images (replace URLs with your own PNGs)
+const sneakers = [
+  'https://i.imgur.com/7yO7XK2.png',
+  'https://i.imgur.com/0X9Mmxh.png',
+  'https://i.imgur.com/znzYzcn.png'
+];
+let currentSneaker = 0;
+const sneakerImg = new Image();
+sneakerImg.src = sneakers[currentSneaker];
+
+function changeSneaker(i) {
+  currentSneaker = i;
+  sneakerImg.src = sneakers[i];
+}
+
+navigator.mediaDevices.getUserMedia({ video: true }).then(stream => {
+  video.srcObject = stream;
+});
+
+function resizeCanvas() {
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+}
+resizeCanvas();
+window.addEventListener('resize', resizeCanvas);
+
+const pose = new Pose({locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/pose@0.5/${file}`});
+pose.setOptions({
+  modelComplexity: 1,
+  smoothLandmarks: true,
+  minDetectionConfidence: 0.5,
+  minTrackingConfidence: 0.5
+});
+
+pose.onResults(results => {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+  if (results.poseLandmarks) {
+    const leftAnkle = results.poseLandmarks[27];
+    const rightAnkle = results.poseLandmarks[28];
+    const leftKnee = results.poseLandmarks[25];
+    const rightKnee = results.poseLandmarks[26];
+
+    // Angle and distance for rotation and scaling
+    function drawSneaker(ankle, knee) {
+      const dx = knee.x - ankle.x;
+      const dy = knee.y - ankle.y;
+      const angle = Math.atan2(dy, dx);
+      const scale = 200; // Размер кроссовок
+      const posX = ankle.x * canvas.width;
+      const posY = ankle.y * canvas.height;
+
+      ctx.save();
+      ctx.translate(posX, posY);
+      ctx.rotate(angle + Math.PI);
+      ctx.drawImage(sneakerImg, -scale/2, -scale/4, scale, scale/2);
+      ctx.restore();
+    }
+
+    drawSneaker(leftAnkle, leftKnee);
+    drawSneaker(rightAnkle, rightKnee);
+  }
+});
+
+async function cameraLoop() {
+  await pose.send({image: video});
+  requestAnimationFrame(cameraLoop);
+}
+video.onloadeddata = cameraLoop;
+</script>
+
+</body>
+</html>
